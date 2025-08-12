@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="sw">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Akiba Tracker - 1,000 TZS Kila Siku</title>
+<style>
+  body{font-family:sans-serif;background:#2e7d32;color:#c8e6c9;margin:0;padding:1rem;display:flex;justify-content:center;align-items:flex-start;min-height:100vh;}
+  #loginScreen, #app{max-width:480px;width:100%;background:#1b5e20;padding:1rem 1.5rem;border-radius:12px;box-shadow:0 0 15px #81c784;}
+  #app{display:none;}
+  h1{text-align:center;margin-bottom:1rem;}
+  form{display:flex;flex-wrap:wrap;gap:0.7rem;margin-bottom:1rem;justify-content:center;}
+  select,input[type=date],input[type=password]{padding:0.5rem;border:none;border-radius:8px;flex:1;min-width:120px;background:#388e3c;color:#c8e6c9;}
+  button{background:#81c784;color:#1b5e20;border:none;padding:0.7rem 1.2rem;border-radius:10px;cursor:pointer;flex-shrink:0;}
+  button:hover{background:#a5d6a7;}
+  table{width:100%;border-collapse:collapse;margin-top:1rem;background:#2e7d32;border-radius:10px;overflow:hidden;}
+  th,td{text-align:center;padding:0.6rem;}
+  th{background:#81c784;color:#1b5e20;font-weight:700;}
+  tbody tr:nth-child(odd){background:#1b5e20;}
+  tbody tr:nth-child(even){background:#388e3c;}
+  .summary {
+    display: flex;
+    justify-content: space-between;
+    background:#388e3c;
+    padding:0.8rem 1rem;
+    border-radius:10px;
+    font-weight:600;
+    margin-bottom:1rem;
+  }
+  .summary > div {
+    flex: 1;
+    text-align: center;
+    position: relative;
+    padding: 0 0.8rem;
+  }
+  .summary > div:not(:last-child) {
+    border-right: 2px solid #a5d6a7;
+  }
+  .progress{flex:2;background:#1b5e20;border-radius:10px;margin-left:1rem;position:relative;overflow:hidden;}
+  .progress > div{background:#a5d6a7;height:20px;width:0;transition:width 0.3s;}
+  #errorMsg {color:#f44336;text-align:center;margin-top:0.5rem;display:none;}
+</style>
+</head>
+<body>
+<div id="loginScreen" aria-label="Skrini ya kuingia password">
+  <h2 style="text-align:center;color:#a5d6a7;">Ingiza Password</h2>
+  <form id="loginForm" style="display:flex;gap:0.5rem;justify-content:center;max-width:300px;margin:auto;">
+    <input type="password" id="passwordInput" placeholder="Password" aria-label="Ingiza password" required autocomplete="off" />
+    <button type="submit" aria-label="Ingia">Ingia</button>
+  </form>
+  <div id="errorMsg">Password si sahihi.</div>
+</div>
+
+<div id="app" aria-label="Akiba Tracker app">
+  <h1>Akiba Tracker</h1>
+  <div class="summary">
+    <div><div>Kipindi:</div><div id="range">--</div></div>
+    <div><div>Balance:</div><div id="balance">0 TZS</div></div>
+    <div class="progress" aria-label="Progress bar"><div id="progressBar"></div></div>
+  </div>
+  <form id="form" aria-label="Fomu ya kuweka akiba">
+    <select id="mode" aria-label="Chagua aina ya malipo">
+      <option value="one">Siku Moja</option>
+      <option value="multi">Siku Nyingi</option>
+    </select>
+    <input type="date" id="start" required aria-label="Tarehe kuanzia" />
+    <input type="date" id="end" aria-label="Tarehe mpaka" style="display:none;" />
+    <button type="submit" aria-label="Weka Akiba">Weka</button>
+  </form>
+  <table aria-label="Jedwali la rekodi">
+    <thead><tr><th>Tarehe</th><th>Kiasi</th><th>Status</th></tr></thead>
+    <tbody id="records"></tbody>
+  </table>
+  <div style="margin-top:1rem;display:flex;gap:1rem;justify-content:center;">
+    <button id="export">Export CSV</button>
+    <button id="reset">Reset</button>
+    <button id="logout">Logout</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const PASSWORD = "21072003";
+  const daily = 1000, key="akiba_data";
+  const loginScreen = document.getElementById("loginScreen");
+  const loginForm = document.getElementById("loginForm");
+  const passwordInput = document.getElementById("passwordInput");
+  const errorMsg = document.getElementById("errorMsg");
+
+  const app = document.getElementById("app");
+  const mode = document.getElementById("mode"),
+        start = document.getElementById("start"),
+        end = document.getElementById("end"),
+        form = document.getElementById("form"),
+        recordsTbody = document.getElementById("records"),
+        range = document.getElementById("range"),
+        balance = document.getElementById("balance"),
+        progressBar = document.getElementById("progressBar"),
+        exportBtn = document.getElementById("export"),
+        resetBtn = document.getElementById("reset"),
+        logoutBtn = document.getElementById("logout");
+
+  let data = JSON.parse(localStorage.getItem(key)||"[]");
+
+  function save() { localStorage.setItem(key, JSON.stringify(data)); }
+  function formatDate(d) {
+    return new Date(d).toLocaleDateString('sw-TZ',{year:'numeric',month:'short',day:'numeric'});
+  }
+  function updateUI() {
+    if(!data.length){
+      range.textContent = "--";
+      balance.textContent = "0 TZS";
+      progressBar.style.width = "0%";
+      recordsTbody.innerHTML = "";
+      return;
+    }
+    data.sort((a,b)=>a.date.localeCompare(b.date));
+    recordsTbody.innerHTML = data.map(d => 
+      `<tr><td>${formatDate(d.date)}</td><td>${d.amount.toLocaleString()} TZS</td><td>✅</td></tr>`
+    ).join("");
+    const total = data.reduce((acc,v)=>acc+v.amount,0);
+    balance.textContent = total.toLocaleString() + " TZS";
+    range.textContent = formatDate(data[0].date)+" — "+formatDate(data[data.length-1].date);
+    const startDate = new Date(data[0].date);
+    const endDate = new Date(data[data.length-1].date);
+    const days = Math.floor((endDate-startDate)/(86400000))+1;
+    const percent = Math.min(100,(data.length/days)*100);
+    progressBar.style.width = percent+"%";
+  }
+  function generateDates(s,e){
+    let arr = [];
+    let d = new Date(s);
+    let endD = new Date(e);
+    while(d <= endD){
+      arr.push(d.toISOString().slice(0,10));
+      d.setDate(d.getDate()+1);
+    }
+    return arr;
+  }
+  mode.addEventListener("change", e => {
+    end.style.display = (mode.value === "multi") ? "inline-block" : "none";
+    if(mode.value !== "multi") end.value = "";
+  });
+  form.addEventListener("submit", e => {
+    e.preventDefault();
+    if(!start.value) return alert("Tafadhali chagua tarehe kuanzia.");
+    if(mode.value === "multi" && !end.value) return alert("Tafadhali chagua tarehe mpaka.");
+    let dates = (mode.value==="one") ? [start.value] : generateDates(start.value,end.value);
+    let newRecords = dates.map(d => ({date:d,amount:daily}));
+    let existingDates = new Set(data.map(r=>r.date));
+    newRecords = newRecords.filter(r=>!existingDates.has(r.date));
+    if(newRecords.length === 0){
+      alert("Tarehe zote tayari zimeshatumika.");
+      return;
+    }
+    data = data.concat(newRecords);
+    save();
+    updateUI();
+    form.reset();
+    if(mode.value==="multi") end.style.display="none";
+  });
+  exportBtn.addEventListener("click", () => {
+    if(!data.length) return alert("Hakuna data ya ku-export.");
+    let csv = "Tarehe,Kiasi,Status\n";
+    data.forEach(r => {
+      csv += `${r.date},${r.amount},✅\n`;
+    });
+    const blob = new Blob([csv], {type: "text/csv"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "akiba.csv"; a.click();
+    URL.revokeObjectURL(url);
+  });
+  resetBtn.addEventListener("click", () => {
+    if(confirm("Una hakika unataka kufuta data zote?")) {
+      data = [];
+      save();
+      updateUI();
+    }
+  });
+  logoutBtn.addEventListener("click", () => {
+    if(confirm("Unataka kutoka?")) {
+      app.style.display = "none";
+      loginScreen.style.display = "block";
+      passwordInput.value = "";
+      errorMsg.style.display = "none";
+    }
+  });
+
+  loginForm.addEventListener("submit", e => {
+    e.preventDefault();
+    if(passwordInput.value === PASSWORD){
+      loginScreen.style.display = "none";
+      app.style.display = "block";
+      errorMsg.style.display = "none";
+      passwordInput.value = "";
+      updateUI();
+    } else {
+      errorMsg.style.display = "block";
+    }
+  });
+
+  // Show login initially
+  loginScreen.style.display = "block";
+  app.style.display = "none";
+})();
+</script>
+</body>
+</html>
